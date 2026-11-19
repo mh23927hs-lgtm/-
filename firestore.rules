@@ -1,0 +1,668 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Core Primitives & RBAC Helpers
+    // ---------------------------------------------------------
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidEmailId(email) {
+      return email is string && email.size() >= 3 && email.size() <= 150 && email.matches('^[^/]+@[^/]+\\.[^/]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwnerUser(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedOwner() {
+      return isVerifiedUser()
+        && request.auth.token.email != null
+        && (request.auth.token.email.lower() == 'mh239273@gmail.com'
+          || request.auth.token.email.lower() == 'mh23927hs@gmail.com');
+    }
+
+    function staffPath() {
+      return /databases/$(database)/documents/staff_invites/$(request.auth.token.email.lower());
+    }
+
+    function isStaffActive() {
+      return isVerifiedUser()
+        && request.auth.token.email != null
+        && exists(staffPath())
+        && get(staffPath()).data.isActive == true;
+    }
+
+    function staffData() {
+      return get(staffPath()).data;
+    }
+
+    function isStoreOwner() {
+      return isBootstrappedOwner() || (isStaffActive() && staffData().role == 'owner');
+    }
+
+    function isAnyStaff() {
+      return isBootstrappedOwner() || isStaffActive();
+    }
+
+    function hasStaffPerm(perm) {
+      return isStoreOwner()
+        || (isStaffActive() && staffData().permissions[perm] == true);
+    }
+
+    function isOptStr(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isOptNum(data, key, minVal) {
+      return !(key in data) || data[key] == null || (data[key] is number && data[key] >= minVal);
+    }
+
+    // ---------------------------------------------------------
+    // Validation Blueprints
+    // ---------------------------------------------------------
+    function isValidStoreSettings(data) {
+      return data.keys().hasAll(['nameAr', 'nameEn', 'currency', 'isAcceptingOrders', 'updatedAt'])
+        && data.keys().hasOnly([
+          'nameAr', 'nameEn', 'description', 'logoUrl', 'heroImageUrl',
+          'heroTitle', 'heroSubtitle', 'phone', 'whatsapp', 'address',
+          'currency', 'minOrderAmount', 'defaultDeliveryFee',
+          'isAcceptingOrders', 'allowScheduledOrders', 'pickupEnabled', 'deliveryEnabled', 'dineInEnabled',
+          'announcementEnabled', 'announcementText', 'workingHours',
+          'holidays', 'homeSectionsOrder', 'faqItems',
+          'privacyPolicy', 'termsOfUse', 'refundPolicy', 'updatedAt'
+        ])
+        && data.nameAr is string && data.nameAr.size() >= 1 && data.nameAr.size() <= 80
+        && data.nameEn is string && data.nameEn.size() >= 1 && data.nameEn.size() <= 80
+        && data.currency is string && data.currency.size() >= 1 && data.currency.size() <= 16
+        && data.isAcceptingOrders is bool
+        && isOptStr(data, 'description', 500)
+        && isOptStr(data, 'logoUrl', 500)
+        && isOptStr(data, 'heroImageUrl', 500)
+        && isOptStr(data, 'heroTitle', 120)
+        && isOptStr(data, 'heroSubtitle', 240)
+        && isOptStr(data, 'phone', 30)
+        && isOptStr(data, 'whatsapp', 30)
+        && isOptStr(data, 'address', 240)
+        && isOptNum(data, 'minOrderAmount', 0)
+        && isOptNum(data, 'defaultDeliveryFee', 0)
+        && (!('allowScheduledOrders' in data) || data.allowScheduledOrders is bool)
+        && (!('pickupEnabled' in data) || data.pickupEnabled is bool)
+        && (!('deliveryEnabled' in data) || data.deliveryEnabled is bool)
+        && (!('dineInEnabled' in data) || data.dineInEnabled is bool)
+        && (!('announcementEnabled' in data) || data.announcementEnabled is bool)
+        && isOptStr(data, 'announcementText', 200)
+        && (!('workingHours' in data) || data.workingHours is map)
+        && (!('holidays' in data) || (data.holidays is list && data.holidays.size() <= 60))
+        && (!('homeSectionsOrder' in data) || (data.homeSectionsOrder is list && data.homeSectionsOrder.size() <= 12))
+        && (!('faqItems' in data) || (data.faqItems is list && data.faqItems.size() <= 40))
+        && isOptStr(data, 'privacyPolicy', 5000)
+        && isOptStr(data, 'termsOfUse', 5000)
+        && isOptStr(data, 'refundPolicy', 5000)
+        && data.updatedAt == request.time;
+    }
+
+    function isValidPaymentSettings(data) {
+      return data.keys().hasAll(['codDeliveryEnabled', 'codPickupEnabled', 'onlinePaymentEnabled', 'onlineProvider', 'updatedAt'])
+        && data.keys().hasOnly(['codDeliveryEnabled', 'codPickupEnabled', 'onlinePaymentEnabled', 'onlineProvider', 'updatedAt'])
+        && data.codDeliveryEnabled is bool
+        && data.codPickupEnabled is bool
+        && data.onlinePaymentEnabled is bool
+        && data.onlineProvider in ['none', 'stripe', 'moyasar', 'tap']
+        && data.updatedAt == request.time;
+    }
+
+    function isValidBanner(data) {
+      return data.keys().hasAll(['title', 'linkType', 'sortOrder', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['title', 'subtitle', 'imageUrl', 'linkType', 'linkTarget', 'sortOrder', 'isActive', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && isOptStr(data, 'subtitle', 240)
+        && isOptStr(data, 'imageUrl', 500)
+        && data.linkType in ['none', 'category', 'product', 'offer']
+        && isOptStr(data, 'linkTarget', 128)
+        && data.sortOrder is number
+        && data.isActive is bool
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['name', 'sortOrder', 'isActive', 'isHidden', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['name', 'description', 'imageUrl', 'sortOrder', 'isActive', 'isHidden', 'createdAt', 'updatedAt'])
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && isOptStr(data, 'description', 300)
+        && isOptStr(data, 'imageUrl', 500)
+        && data.sortOrder is number
+        && data.isActive is bool
+        && data.isHidden is bool
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll([
+          'name', 'price', 'categoryId', 'isAvailable', 'isHidden',
+          'showOnHome', 'isFeatured', 'salesCount', 'optionGroups', 'addons',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'name', 'description', 'price', 'discountPrice', 'categoryId', 'imageUrl',
+          'isAvailable', 'isHidden', 'stockQuantity', 'prepTimeMinutes', 'calories', 'allergens',
+          'showOnHome', 'isFeatured', 'salesCount', 'optionGroups', 'addons',
+          'createdAt', 'updatedAt'
+        ])
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && isOptStr(data, 'description', 1000)
+        && data.price is number && data.price >= 0
+        && isOptNum(data, 'discountPrice', 0)
+        && isValidId(data.categoryId)
+        && isOptStr(data, 'imageUrl', 500)
+        && data.isAvailable is bool
+        && data.isHidden is bool
+        && isOptNum(data, 'stockQuantity', 0)
+        && isOptNum(data, 'prepTimeMinutes', 0)
+        && isOptNum(data, 'calories', 0)
+        && isOptStr(data, 'allergens', 200)
+        && data.showOnHome is bool
+        && data.isFeatured is bool
+        && data.salesCount is number && data.salesCount >= 0
+        && data.optionGroups is list && data.optionGroups.size() <= 20
+        && data.addons is list && data.addons.size() <= 30
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidProductCost(data) {
+      return data.keys().hasAll(['costPrice', 'updatedAt'])
+        && data.keys().hasOnly(['costPrice', 'updatedAt'])
+        && data.costPrice is number && data.costPrice >= 0
+        && data.updatedAt == request.time;
+    }
+
+    function isValidOffer(data) {
+      return data.keys().hasAll(['title', 'type', 'discountType', 'discountValue', 'isActive', 'usageCount', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'title', 'description', 'type', 'code', 'discountType', 'discountValue',
+          'minOrderAmount', 'startDate', 'endDate', 'productIds', 'isActive',
+          'usageCount', 'createdAt', 'updatedAt'
+        ])
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && isOptStr(data, 'description', 400)
+        && data.type in ['discount', 'coupon']
+        && isOptStr(data, 'code', 32)
+        && data.discountType in ['percent', 'fixed']
+        && data.discountValue is number && data.discountValue >= 0
+        && isOptNum(data, 'minOrderAmount', 0)
+        && isOptStr(data, 'startDate', 40)
+        && isOptStr(data, 'endDate', 40)
+        && (!('productIds' in data) || (data.productIds is list && data.productIds.size() <= 100))
+        && data.isActive is bool
+        && data.usageCount is number && data.usageCount >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidDeliveryZone(data) {
+      return data.keys().hasAll(['governorate', 'city', 'area', 'fee', 'minOrderAmount', 'estimatedMinutes', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['governorate', 'city', 'area', 'fee', 'minOrderAmount', 'estimatedMinutes', 'isActive', 'createdAt', 'updatedAt'])
+        && data.governorate is string && data.governorate.size() >= 1 && data.governorate.size() <= 80
+        && data.city is string && data.city.size() >= 1 && data.city.size() <= 80
+        && data.area is string && data.area.size() >= 1 && data.area.size() <= 80
+        && data.fee is number && data.fee >= 0
+        && data.minOrderAmount is number && data.minOrderAmount >= 0
+        && data.estimatedMinutes is number && data.estimatedMinutes >= 0
+        && data.isActive is bool
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'name', 'favoriteProductIds', 'ordersCount', 'totalSpent', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'favoriteProductIds', 'ordersCount', 'totalSpent', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && isOptStr(data, 'phone', 30)
+        && isOptStr(data, 'email', 150)
+        && data.favoriteProductIds is list && data.favoriteProductIds.size() <= 100
+        && data.ordersCount is number && data.ordersCount >= 0
+        && data.totalSpent is number && data.totalSpent >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidAddress(data) {
+      return data.keys().hasAll(['label', 'governorate', 'city', 'area', 'street', 'isDefault', 'createdAt'])
+        && data.keys().hasOnly(['label', 'governorate', 'city', 'area', 'street', 'details', 'lat', 'lng', 'isDefault', 'createdAt'])
+        && data.label is string && data.label.size() >= 1 && data.label.size() <= 60
+        && data.governorate is string && data.governorate.size() >= 1 && data.governorate.size() <= 80
+        && data.city is string && data.city.size() >= 1 && data.city.size() <= 80
+        && data.area is string && data.area.size() >= 1 && data.area.size() <= 80
+        && data.street is string && data.street.size() >= 1 && data.street.size() <= 160
+        && isOptStr(data, 'details', 300)
+        && (!('lat' in data) || data.lat == null || data.lat is number)
+        && (!('lng' in data) || data.lng == null || data.lng is number)
+        && data.isDefault is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+          'orderNumber', 'customerId', 'customerName', 'customerPhone',
+          'fulfillmentType', 'items', 'subtotal', 'discountAmount',
+          'deliveryFee', 'total', 'paymentMethod', 'paymentStatus',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'orderNumber', 'customerId', 'customerName', 'customerPhone', 'customerEmail',
+          'fulfillmentType', 'deliveryAddress', 'tableNumber', 'pickupTime', 'scheduledFor',
+          'items', 'subtotal', 'discountAmount', 'couponCode', 'deliveryFee', 'total',
+          'paymentMethod', 'paymentStatus', 'paymentProvider', 'paymentReference',
+          'status', 'notes', 'rejectionReason', 'createdAt', 'updatedAt'
+        ])
+        && data.orderNumber is string && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 32
+        && isValidId(data.customerId)
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100
+        && data.customerPhone is string && data.customerPhone.size() >= 5 && data.customerPhone.size() <= 30
+        && isOptStr(data, 'customerEmail', 150)
+        && data.fulfillmentType in ['delivery', 'pickup', 'dine_in']
+        && (!('deliveryAddress' in data) || data.deliveryAddress == null || data.deliveryAddress is map)
+        && isOptStr(data, 'tableNumber', 32)
+        && isOptStr(data, 'pickupTime', 80)
+        && isOptStr(data, 'scheduledFor', 80)
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 60
+        && data.items[0] is map
+        && data.subtotal is number && data.subtotal >= 0
+        && data.discountAmount is number && data.discountAmount >= 0
+        && isOptStr(data, 'couponCode', 32)
+        && data.deliveryFee is number && data.deliveryFee >= 0
+        && data.total is number && data.total >= 0
+        && data.paymentMethod in ['cod_delivery', 'cod_pickup', 'online']
+        && data.paymentStatus in ['pending', 'paid', 'failed', 'refunded']
+        && isOptStr(data, 'paymentProvider', 32)
+        && isOptStr(data, 'paymentReference', 160)
+        && data.status in ['new', 'received', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled']
+        && isOptStr(data, 'notes', 500)
+        && isOptStr(data, 'rejectionReason', 300)
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['targetType', 'title', 'body', 'isRead', 'createdAt'])
+        && data.keys().hasOnly(['targetType', 'targetUserId', 'title', 'body', 'orderId', 'isRead', 'createdAt'])
+        && data.targetType in ['user', 'admin', 'broadcast']
+        && isOptStr(data, 'targetUserId', 128)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 140
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 500
+        && isOptStr(data, 'orderId', 128)
+        && data.isRead is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFcmToken(data) {
+      return data.keys().hasAll(['userId', 'token', 'platform', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'token', 'platform', 'updatedAt'])
+        && isValidId(data.userId)
+        && data.token is string && data.token.size() >= 10 && data.token.size() <= 512
+        && data.platform is string && data.platform.size() >= 1 && data.platform.size() <= 40
+        && data.updatedAt == request.time;
+    }
+
+    function isValidStaffInvite(data) {
+      return data.keys().hasAll(['email', 'name', 'role', 'permissions', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['email', 'name', 'role', 'permissions', 'isActive', 'createdAt', 'updatedAt'])
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 150
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.role in ['owner', 'manager', 'employee']
+        && data.permissions is map
+        && data.isActive is bool
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['actorUid', 'actorRole', 'action', 'targetCollection', 'summary', 'createdAt'])
+        && data.keys().hasOnly(['actorUid', 'actorEmail', 'actorRole', 'action', 'targetCollection', 'targetId', 'summary', 'createdAt'])
+        && isValidId(data.actorUid)
+        && isOptStr(data, 'actorEmail', 150)
+        && data.actorRole is string && data.actorRole.size() >= 1 && data.actorRole.size() <= 32
+        && data.action is string && data.action.size() >= 1 && data.action.size() <= 80
+        && data.targetCollection is string && data.targetCollection.size() >= 1 && data.targetCollection.size() <= 80
+        && isOptStr(data, 'targetId', 128)
+        && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 300
+        && data.createdAt == request.time;
+    }
+
+    function isValidMediaAsset(data) {
+      return data.keys().hasAll(['dataUrl', 'mimeType', 'uploadedBy', 'createdAt'])
+        && data.keys().hasOnly(['dataUrl', 'mimeType', 'uploadedBy', 'createdAt'])
+        && data.dataUrl is string && data.dataUrl.size() >= 10 && data.dataUrl.size() <= 550000
+        && data.mimeType is string && data.mimeType.size() >= 5 && data.mimeType.size() <= 40
+        && isValidId(data.uploadedBy)
+        && data.createdAt == request.time;
+    }
+
+    function isValidRating(data) {
+      return data.keys().hasAll([
+          'orderId', 'orderNumber', 'customerId', 'customerName',
+          'fulfillmentType', 'restaurantRating', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'orderId', 'orderNumber', 'customerId', 'customerName',
+          'fulfillmentType', 'restaurantRating', 'driverRating',
+          'comment', 'staffReply', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.orderId)
+        && data.orderNumber is string && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 32
+        && isValidId(data.customerId)
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100
+        && data.fulfillmentType in ['delivery', 'pickup', 'dine_in']
+        && data.restaurantRating is number && data.restaurantRating >= 1 && data.restaurantRating <= 5
+        && (!('driverRating' in data) || data.driverRating == null || (data.driverRating is number && data.driverRating >= 1 && data.driverRating <= 5))
+        && isOptStr(data, 'comment', 500)
+        && isOptStr(data, 'staffReply', 300)
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    // ---------------------------------------------------------
+    // Collection Match Rules
+    // ---------------------------------------------------------
+
+    match /settings/store {
+      allow get: if true;
+      allow create, update: if isValidStoreSettings(incoming())
+        && hasStaffPerm('manageSettings');
+      allow delete: if false;
+    }
+
+    match /settings/payments {
+      allow get: if true;
+      allow create, update: if isValidPaymentSettings(incoming())
+        && hasStaffPerm('managePayments');
+      allow delete: if false;
+    }
+
+    match /banners/{bannerId} {
+      allow get: if isValidId(bannerId);
+      allow list: if true;
+      allow create: if isValidId(bannerId)
+        && isValidBanner(incoming())
+        && incoming().createdAt == request.time
+        && hasStaffPerm('manageHome');
+      allow update: if isValidId(bannerId)
+        && isValidBanner(incoming())
+        && incoming().createdAt == existing().createdAt
+        && hasStaffPerm('manageHome');
+      allow delete: if isValidId(bannerId) && hasStaffPerm('manageHome');
+    }
+
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create: if isValidId(categoryId)
+        && isValidCategory(incoming())
+        && incoming().createdAt == request.time
+        && hasStaffPerm('manageCategories');
+      allow update: if isValidId(categoryId)
+        && isValidCategory(incoming())
+        && incoming().createdAt == existing().createdAt
+        && hasStaffPerm('manageCategories');
+      allow delete: if isValidId(categoryId) && hasStaffPerm('manageCategories');
+    }
+
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if true;
+      allow create: if isValidId(productId)
+        && isValidProduct(incoming())
+        && incoming().createdAt == request.time
+        && incoming().salesCount == 0
+        && exists(/databases/$(database)/documents/categories/$(incoming().categoryId))
+        && hasStaffPerm('manageProducts');
+      allow update: if isValidId(productId)
+        && isValidProduct(incoming())
+        && incoming().createdAt == existing().createdAt
+        && (hasStaffPerm('manageProducts')
+          || (hasStaffPerm('manageOrders') && incoming().diff(existing()).affectedKeys().hasOnly(['salesCount', 'stockQuantity', 'updatedAt'])));
+      allow delete: if isValidId(productId) && hasStaffPerm('manageProducts');
+    }
+
+    match /product_costs/{productId} {
+      allow get: if isValidId(productId) && (hasStaffPerm('manageProducts') || hasStaffPerm('viewReports'));
+      allow list: if hasStaffPerm('manageProducts') || hasStaffPerm('viewReports');
+      allow create, update: if isValidId(productId)
+        && isValidProductCost(incoming())
+        && hasStaffPerm('manageProducts');
+      allow delete: if isValidId(productId) && hasStaffPerm('manageProducts');
+    }
+
+    match /offers/{offerId} {
+      allow get: if isValidId(offerId);
+      allow list: if true;
+      allow create: if isValidId(offerId)
+        && isValidOffer(incoming())
+        && incoming().createdAt == request.time
+        && incoming().usageCount == 0
+        && hasStaffPerm('manageOffers');
+      allow update: if isValidId(offerId)
+        && isValidOffer(incoming())
+        && incoming().createdAt == existing().createdAt
+        && (hasStaffPerm('manageOffers')
+          || (isVerifiedUser() && incoming().diff(existing()).affectedKeys().hasOnly(['usageCount', 'updatedAt'])
+              && incoming().usageCount == existing().usageCount + 1));
+      allow delete: if isValidId(offerId) && hasStaffPerm('manageOffers');
+    }
+
+    match /delivery_zones/{zoneId} {
+      allow get: if isValidId(zoneId);
+      allow list: if true;
+      allow create: if isValidId(zoneId)
+        && isValidDeliveryZone(incoming())
+        && incoming().createdAt == request.time
+        && hasStaffPerm('manageDelivery');
+      allow update: if isValidId(zoneId)
+        && isValidDeliveryZone(incoming())
+        && incoming().createdAt == existing().createdAt
+        && hasStaffPerm('manageDelivery');
+      allow delete: if isValidId(zoneId) && hasStaffPerm('manageDelivery');
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwnerUser(userId) || hasStaffPerm('manageCustomers') || hasStaffPerm('viewReports'));
+      allow list: if isVerifiedUser() && (resource.data.uid == request.auth.uid || hasStaffPerm('manageCustomers') || hasStaffPerm('viewReports'));
+      allow create: if isValidId(userId)
+        && isOwnerUser(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().ordersCount == 0
+        && incoming().totalSpent == 0
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && (
+          (isOwnerUser(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'favoriteProductIds', 'updatedAt']))
+          || (hasStaffPerm('manageOrders') && incoming().diff(existing()).affectedKeys().hasOnly(['ordersCount', 'totalSpent', 'updatedAt']))
+          || (hasStaffPerm('manageCustomers') && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'ordersCount', 'totalSpent', 'updatedAt']))
+        );
+      allow delete: if isValidId(userId) && isStoreOwner();
+
+      match /addresses/{addressId} {
+        allow get: if isValidId(userId) && isValidId(addressId) && (isOwnerUser(userId) || hasStaffPerm('manageCustomers') || hasStaffPerm('manageOrders'));
+        allow list: if isValidId(userId) && (isOwnerUser(userId) || hasStaffPerm('manageCustomers') || hasStaffPerm('manageOrders'));
+        allow create: if isValidId(userId) && isValidId(addressId)
+          && isOwnerUser(userId)
+          && isValidAddress(incoming())
+          && incoming().createdAt == request.time;
+        allow update: if isValidId(userId) && isValidId(addressId)
+          && isOwnerUser(userId)
+          && isValidAddress(incoming())
+          && incoming().createdAt == existing().createdAt;
+        allow delete: if isValidId(userId) && isValidId(addressId) && isOwnerUser(userId);
+      }
+    }
+
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && isVerifiedUser()
+        && (existing().customerId == request.auth.uid || hasStaffPerm('manageOrders') || hasStaffPerm('viewReports'));
+      allow list: if isVerifiedUser()
+        && (resource.data.customerId == request.auth.uid || hasStaffPerm('manageOrders') || hasStaffPerm('viewReports'));
+      allow create: if isValidId(orderId)
+        && isVerifiedUser()
+        && isValidOrder(incoming())
+        && incoming().customerId == request.auth.uid
+        && incoming().status == 'new'
+        && incoming().paymentStatus == 'pending'
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(orderId)
+        && isVerifiedUser()
+        && isValidOrder(incoming())
+        && incoming().customerId == existing().customerId
+        && incoming().orderNumber == existing().orderNumber
+        && incoming().createdAt == existing().createdAt
+        && (
+          (hasStaffPerm('manageOrders')
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paymentStatus', 'paymentReference', 'rejectionReason', 'updatedAt']))
+          || (existing().customerId == request.auth.uid
+              && existing().status == 'new'
+              && incoming().status == 'cancelled'
+              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+          || (existing().customerId == request.auth.uid
+              && existing().status == 'new'
+              && incoming().paymentMethod == 'online'
+              && incoming().diff(existing()).affectedKeys().hasOnly(['paymentReference', 'updatedAt']))
+        );
+      allow delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isVerifiedUser()
+        && (existing().targetType == 'broadcast'
+          || (existing().targetType == 'user' && existing().targetUserId == request.auth.uid)
+          || (existing().targetType == 'admin' && isAnyStaff()));
+      allow list: if isVerifiedUser()
+        && (resource.data.targetType == 'broadcast'
+          || (resource.data.targetType == 'user' && resource.data.targetUserId == request.auth.uid)
+          || (resource.data.targetType == 'admin' && isAnyStaff()));
+      allow create: if isValidId(notificationId)
+        && isVerifiedUser()
+        && isValidNotification(incoming())
+        && incoming().createdAt == request.time
+        && (
+          (incoming().targetType == 'admin' && incoming().isRead == false)
+          || (hasStaffPerm('manageNotifications') || hasStaffPerm('manageOrders'))
+        );
+      allow update: if isValidId(notificationId)
+        && isVerifiedUser()
+        && isValidNotification(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['isRead'])
+        && (
+          (existing().targetType == 'user' && existing().targetUserId == request.auth.uid)
+          || (existing().targetType == 'admin' && isAnyStaff())
+        );
+      allow delete: if isValidId(notificationId) && hasStaffPerm('manageNotifications');
+    }
+
+    match /fcm_tokens/{tokenId} {
+      allow get: if isValidId(tokenId) && isVerifiedUser() && existing().userId == request.auth.uid;
+      allow list: if isVerifiedUser() && resource.data.userId == request.auth.uid;
+      allow create, update: if isValidId(tokenId)
+        && isVerifiedUser()
+        && isValidFcmToken(incoming())
+        && incoming().userId == request.auth.uid;
+      allow delete: if isValidId(tokenId) && isVerifiedUser() && existing().userId == request.auth.uid;
+    }
+
+    match /staff_invites/{email} {
+      allow get: if isValidEmailId(email) && isVerifiedUser()
+        && (request.auth.token.email.lower() == email || isStoreOwner() || hasStaffPerm('manageStaff'));
+      allow list: if isVerifiedUser() && (isStoreOwner() || hasStaffPerm('manageStaff') || resource.data.email == request.auth.token.email.lower());
+      allow create: if isValidEmailId(email)
+        && isValidStaffInvite(incoming())
+        && incoming().email == email
+        && incoming().createdAt == request.time
+        && (isStoreOwner() || (hasStaffPerm('manageStaff') && incoming().role != 'owner'));
+      allow update: if isValidEmailId(email)
+        && isValidStaffInvite(incoming())
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && (isStoreOwner() || (hasStaffPerm('manageStaff') && existing().role != 'owner' && incoming().role != 'owner'));
+      allow delete: if isValidEmailId(email)
+        && (isStoreOwner() || (hasStaffPerm('manageStaff') && existing().role != 'owner'));
+    }
+
+    match /audit_logs/{logId} {
+      allow get: if isValidId(logId) && (isStoreOwner() || hasStaffPerm('manageStaff'));
+      allow list: if isStoreOwner() || hasStaffPerm('manageStaff');
+      allow create: if isValidId(logId)
+        && isAnyStaff()
+        && isValidAuditLog(incoming())
+        && incoming().actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /media/{mediaId} {
+      allow get: if isValidId(mediaId);
+      allow list: if isAnyStaff();
+      allow create: if isValidId(mediaId)
+        && isAnyStaff()
+        && isValidMediaAsset(incoming())
+        && incoming().uploadedBy == request.auth.uid;
+      allow update: if false;
+      allow delete: if isValidId(mediaId) && isAnyStaff();
+    }
+
+    match /ratings/{orderId} {
+      allow get: if isValidId(orderId);
+      allow list: if true;
+      allow create: if isValidId(orderId)
+        && isVerifiedUser()
+        && isValidRating(incoming())
+        && incoming().orderId == orderId
+        && incoming().customerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/orders/$(orderId))
+        && get(/databases/$(database)/documents/orders/$(orderId)).data.customerId == request.auth.uid
+        && get(/databases/$(database)/documents/orders/$(orderId)).data.status == 'delivered';
+      allow update: if isValidId(orderId)
+        && isVerifiedUser()
+        && isValidRating(incoming())
+        && incoming().orderId == existing().orderId
+        && incoming().customerId == existing().customerId
+        && incoming().createdAt == existing().createdAt
+        && (
+          (existing().customerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['restaurantRating', 'driverRating', 'comment', 'updatedAt']))
+          || (hasStaffPerm('manageOrders')
+              && incoming().diff(existing()).affectedKeys().hasOnly(['staffReply', 'updatedAt']))
+        );
+      allow delete: if isValidId(orderId) && isStoreOwner();
+    }
+  }
+}

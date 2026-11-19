@@ -1,0 +1,389 @@
+{
+  "entities": {
+    "StoreSettings": {
+      "title": "StoreSettings",
+      "description": "Public store configuration, branding, contact info, working hours, policies, and storefront layout.",
+      "type": "object",
+      "properties": {
+        "nameAr": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "nameEn": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 500 },
+        "logoUrl": { "type": "string", "maxLength": 500 },
+        "heroImageUrl": { "type": "string", "maxLength": 500 },
+        "heroTitle": { "type": "string", "maxLength": 120 },
+        "heroSubtitle": { "type": "string", "maxLength": 240 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "whatsapp": { "type": "string", "maxLength": 30 },
+        "address": { "type": "string", "maxLength": 240 },
+        "currency": { "type": "string", "minLength": 1, "maxLength": 16 },
+        "minOrderAmount": { "type": "number" },
+        "defaultDeliveryFee": { "type": "number" },
+        "isAcceptingOrders": { "type": "boolean" },
+        "allowScheduledOrders": { "type": "boolean" },
+        "pickupEnabled": { "type": "boolean" },
+        "deliveryEnabled": { "type": "boolean" },
+        "dineInEnabled": { "type": "boolean" },
+        "announcementEnabled": { "type": "boolean" },
+        "announcementText": { "type": "string", "maxLength": 200 },
+        "workingHours": { "type": "object" },
+        "holidays": { "type": "array" },
+        "homeSectionsOrder": { "type": "array" },
+        "faqItems": { "type": "array" },
+        "privacyPolicy": { "type": "string", "maxLength": 5000 },
+        "termsOfUse": { "type": "string", "maxLength": 5000 },
+        "refundPolicy": { "type": "string", "maxLength": 5000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nameAr", "nameEn", "currency", "isAcceptingOrders", "updatedAt"]
+    },
+    "PaymentSettings": {
+      "title": "PaymentSettings",
+      "description": "Enabled payment methods and active online provider identifier (no secret keys).",
+      "type": "object",
+      "properties": {
+        "codDeliveryEnabled": { "type": "boolean" },
+        "codPickupEnabled": { "type": "boolean" },
+        "onlinePaymentEnabled": { "type": "boolean" },
+        "onlineProvider": { "type": "string", "enum": ["none", "stripe", "moyasar", "tap"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["codDeliveryEnabled", "codPickupEnabled", "onlinePaymentEnabled", "onlineProvider", "updatedAt"]
+    },
+    "Banner": {
+      "title": "Banner",
+      "description": "Promotional banner displayed on the storefront homepage.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "subtitle": { "type": "string", "maxLength": 240 },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "linkType": { "type": "string", "enum": ["none", "category", "product", "offer"] },
+        "linkTarget": { "type": "string", "maxLength": 128 },
+        "sortOrder": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "linkType", "sortOrder", "isActive", "createdAt", "updatedAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Dynamic store category managed by the store owner.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 300 },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "sortOrder": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "isHidden": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "sortOrder", "isActive", "isHidden", "createdAt", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Store product with pricing, options, addons, availability, and real sales count.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "price": { "type": "number" },
+        "discountPrice": { "type": "number" },
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "isAvailable": { "type": "boolean" },
+        "isHidden": { "type": "boolean" },
+        "stockQuantity": { "type": "number" },
+        "prepTimeMinutes": { "type": "number" },
+        "calories": { "type": "number" },
+        "allergens": { "type": "string", "maxLength": 200 },
+        "showOnHome": { "type": "boolean" },
+        "isFeatured": { "type": "boolean" },
+        "salesCount": { "type": "number" },
+        "optionGroups": { "type": "array" },
+        "addons": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "categoryId", "isAvailable", "isHidden", "showOnHome", "isFeatured", "salesCount", "optionGroups", "addons", "createdAt", "updatedAt"]
+    },
+    "ProductCost": {
+      "title": "ProductCost",
+      "description": "Admin-only cost price record for profit reporting.",
+      "type": "object",
+      "properties": {
+        "costPrice": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["costPrice", "updatedAt"]
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "Promotional offer or discount coupon code.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 400 },
+        "type": { "type": "string", "enum": ["discount", "coupon"] },
+        "code": { "type": "string", "maxLength": 32 },
+        "discountType": { "type": "string", "enum": ["percent", "fixed"] },
+        "discountValue": { "type": "number" },
+        "minOrderAmount": { "type": "number" },
+        "startDate": { "type": "string", "maxLength": 40 },
+        "endDate": { "type": "string", "maxLength": 40 },
+        "productIds": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "usageCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "type", "discountType", "discountValue", "isActive", "usageCount", "createdAt", "updatedAt"]
+    },
+    "DeliveryZone": {
+      "title": "DeliveryZone",
+      "description": "Delivery area with fee, minimum order, and estimated time.",
+      "type": "object",
+      "properties": {
+        "governorate": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "city": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "area": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "fee": { "type": "number" },
+        "minOrderAmount": { "type": "number" },
+        "estimatedMinutes": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["governorate", "city", "area", "fee", "minOrderAmount", "estimatedMinutes", "isActive", "createdAt", "updatedAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated customer account profile and favorites (PII restricted to owner/admin).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 150 },
+        "favoriteProductIds": { "type": "array" },
+        "ordersCount": { "type": "number" },
+        "totalSpent": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "favoriteProductIds", "ordersCount", "totalSpent", "createdAt", "updatedAt"]
+    },
+    "Address": {
+      "title": "Address",
+      "description": "Customer saved delivery address.",
+      "type": "object",
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "governorate": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "city": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "area": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "street": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "details": { "type": "string", "maxLength": 300 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "isDefault": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["label", "governorate", "city", "area", "street", "isDefault", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order with itemized products, options, addons, payment status, and tracking status.",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "customerPhone": { "type": "string", "minLength": 5, "maxLength": 30 },
+        "customerEmail": { "type": "string", "maxLength": 150 },
+        "fulfillmentType": { "type": "string", "enum": ["delivery", "pickup", "dine_in"] },
+        "deliveryAddress": { "type": "object" },
+        "tableNumber": { "type": "string", "maxLength": 32 },
+        "pickupTime": { "type": "string", "maxLength": 80 },
+        "scheduledFor": { "type": "string", "maxLength": 80 },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "couponCode": { "type": "string", "maxLength": 32 },
+        "deliveryFee": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["cod_delivery", "cod_pickup", "online"] },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid", "failed", "refunded"] },
+        "paymentProvider": { "type": "string", "maxLength": 32 },
+        "paymentReference": { "type": "string", "maxLength": 160 },
+        "status": { "type": "string", "enum": ["new", "received", "preparing", "ready", "out_for_delivery", "delivered", "cancelled"] },
+        "notes": { "type": "string", "maxLength": 500 },
+        "rejectionReason": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderNumber", "customerId", "customerName", "customerPhone", "fulfillmentType", "items", "subtotal", "discountAmount", "deliveryFee", "total", "paymentMethod", "paymentStatus", "status", "createdAt", "updatedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time notification for order updates, admin alerts, or store announcements.",
+      "type": "object",
+      "properties": {
+        "targetType": { "type": "string", "enum": ["user", "admin", "broadcast"] },
+        "targetUserId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["targetType", "title", "body", "isRead", "createdAt"]
+    },
+    "FcmToken": {
+      "title": "FcmToken",
+      "description": "Registered Firebase Cloud Messaging device token.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "token": { "type": "string", "minLength": 10, "maxLength": 512 },
+        "platform": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "token", "platform", "updatedAt"]
+    },
+    "StaffInvite": {
+      "title": "StaffInvite",
+      "description": "Role-based access control record for owner, manager, and employee accounts.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "minLength": 3, "maxLength": 150 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "role": { "type": "string", "enum": ["owner", "manager", "employee"] },
+        "permissions": { "type": "object" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "name", "role", "permissions", "isActive", "createdAt", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable log of administrative actions.",
+      "type": "object",
+      "properties": {
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 150 },
+        "actorRole": { "type": "string", "maxLength": 32 },
+        "action": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "targetCollection": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorUid", "actorRole", "action", "targetCollection", "summary", "createdAt"]
+    },
+    "MediaAsset": {
+      "title": "MediaAsset",
+      "description": "Compressed image uploaded by store management.",
+      "type": "object",
+      "properties": {
+        "dataUrl": { "type": "string", "minLength": 10, "maxLength": 550000 },
+        "mimeType": { "type": "string", "maxLength": 40 },
+        "uploadedBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["dataUrl", "mimeType", "uploadedBy", "createdAt"]
+    },
+    "Rating": {
+      "title": "Rating",
+      "description": "Customer rating for the restaurant and delivery driver on a delivered order.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderNumber": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "fulfillmentType": { "type": "string", "enum": ["delivery", "pickup", "dine_in"] },
+        "restaurantRating": { "type": "number" },
+        "driverRating": { "type": "number" },
+        "comment": { "type": "string", "maxLength": 500 },
+        "staffReply": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderId", "orderNumber", "customerId", "customerName", "fulfillmentType", "restaurantRating", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/settings/store": {
+      "schema": { "$ref": "#/entities/StoreSettings" },
+      "description": "Storefront public configuration, working hours, contact info, and legal policies."
+    },
+    "/settings/payments": {
+      "schema": { "$ref": "#/entities/PaymentSettings" },
+      "description": "Active payment methods and online payment provider configuration."
+    },
+    "/banners/{bannerId}": {
+      "schema": { "$ref": "#/entities/Banner" },
+      "description": "Homepage banners."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Store categories."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Store products with dynamic options and addons."
+    },
+    "/product_costs/{productId}": {
+      "schema": { "$ref": "#/entities/ProductCost" },
+      "description": "Confidential product cost prices for admin profit reporting."
+    },
+    "/offers/{offerId}": {
+      "schema": { "$ref": "#/entities/Offer" },
+      "description": "Storefront discounts and coupon codes."
+    },
+    "/delivery_zones/{zoneId}": {
+      "schema": { "$ref": "#/entities/DeliveryZone" },
+      "description": "Delivery areas, fees, minimum orders, and ETAs."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Customer profile and favorites."
+    },
+    "/users/{userId}/addresses/{addressId}": {
+      "schema": { "$ref": "#/entities/Address" },
+      "description": "Customer saved delivery addresses."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Order status and announcement notifications."
+    },
+    "/fcm_tokens/{tokenId}": {
+      "schema": { "$ref": "#/entities/FcmToken" },
+      "description": "Push notification tokens."
+    },
+    "/staff_invites/{email}": {
+      "schema": { "$ref": "#/entities/StaffInvite" },
+      "description": "Staff RBAC assignments keyed by lowercase email."
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Administrative action audit trail."
+    },
+    "/media/{mediaId}": {
+      "schema": { "$ref": "#/entities/MediaAsset" },
+      "description": "Owner-uploaded compressed product and store images."
+    },
+    "/ratings/{orderId}": {
+      "schema": { "$ref": "#/entities/Rating" },
+      "description": "Verified customer ratings for restaurant and delivery driver."
+    }
+  }
+}
